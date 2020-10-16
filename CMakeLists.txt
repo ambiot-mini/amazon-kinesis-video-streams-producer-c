@@ -21,7 +21,13 @@ option(MEMORY_SANITIZER "Build with MemorySanitizer." OFF)
 option(THREAD_SANITIZER "Build with ThreadSanitizer." OFF)
 option(UNDEFINED_BEHAVIOR_SANITIZER "Build with UndefinedBehaviorSanitizer." OFF)
 option(ALIGNED_MEMORY_MODEL "Aligned memory model ONLY." OFF)
+option(BUILD_KVSPIC "Whether or not to build the part of kvs pic" OFF)
+option(KVS_PLAT_ESP_FREERTOS "Build for ESP FreeRTOS" ON)
 
+
+if(KVS_PLAT_ESP_FREERTOS)
+  add_definitions(-DKVS_PLAT_ESP_FREERTOS)
+endif()
 set(CMAKE_MACOSX_RPATH TRUE)
 
 get_filename_component(ROOT "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)
@@ -94,12 +100,14 @@ endif()
 ############# fetch repos that we need do add_subdirectory ############
 
 # repos that we will build using add_subdirectory will be stored in this path
-set(DEPENDENCY_DOWNLOAD_PATH ${CMAKE_CURRENT_SOURCE_DIR}/dependency)
-set(BUILD_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
-fetch_repo(kvspic ${BUILD_ARGS})
-add_subdirectory("${DEPENDENCY_DOWNLOAD_PATH}/libkvspic/kvspic-src")
-file(GLOB PIC_HEADERS "${pic_project_SOURCE_DIR}/src/*/include")
-include_directories("${PIC_HEADERS}")
+if (BUILD_KVSPIC)
+  set(DEPENDENCY_DOWNLOAD_PATH ${CMAKE_CURRENT_SOURCE_DIR}/dependency)
+  set(BUILD_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
+  fetch_repo(kvspic ${BUILD_ARGS})
+  add_subdirectory("${DEPENDENCY_DOWNLOAD_PATH}/libkvspic/kvspic-src")
+  file(GLOB PIC_HEADERS "${pic_project_SOURCE_DIR}/src/*/include")
+  include_directories("${PIC_HEADERS}")
+endif()
 
 ############# fetch repos that we need do add_subdirectory done ############
 
@@ -108,19 +116,21 @@ include_directories("${PIC_HEADERS}")
 find_package(Threads)
 find_package(PkgConfig REQUIRED)
 
-set(OPEN_SRC_INCLUDE_DIRS ${LIBKVSPIC_INCLUDE_DIRS})
 
-if(USE_OPENSSL)
-  find_package(OpenSSL)
-  if(NOT OPENSSL_FOUND AND NOT BUILD_DEPENDENCIES)
-    message(FATAL_ERROR "OpenSSL is not found. Make sure to export PKG_CONFIG_PATH to where OpenSSL's pc file is")
+
+if(NOT KVS_PLAT_ESP_FREERTOS)
+  if(USE_OPENSSL)
+    find_package(OpenSSL)
+    if(NOT OPENSSL_FOUND AND NOT BUILD_DEPENDENCIES)
+      message(FATAL_ERROR "OpenSSL is not found. Make sure to export PKG_CONFIG_PATH to where OpenSSL's pc file is")
+    endif()
+    set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
+  elseif(USE_MBEDTLS)
+      find_package(MbedTLS REQUIRED)
+      set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${MBEDTLS_INCLUDE_DIRS})
+  else()
+    message(FATAL_ERROR "No crypto library selected.")
   endif()
-  set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
-elseif(USE_MBEDTLS)
-  find_package(MbedTLS REQUIRED)
-  set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${MBEDTLS_INCLUDE_DIRS})
-else()
-  message(FATAL_ERROR "No crypto library selected.")
 endif()
 
 if(BUILD_COMMON_CURL)
@@ -135,6 +145,7 @@ if(BUILD_COMMON_CURL)
   link_directories(${CURL_LIBRARY_DIRS})
 endif()
 
+if(NOT KVS_PLAT_ESP_FREERTOS)
 if (BUILD_COMMON_LWS)
   if (WIN32)
     find_package(LIBWEBSOCKETS REQUIRED PATHS ${OPEN_SRC_INSTALL_PREFIX})
@@ -145,7 +156,7 @@ if (BUILD_COMMON_LWS)
   set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${LIBWEBSOCKETS_INCLUDE_DIRS})
   link_directories(${LIBWEBSOCKETS_LIBRARY_DIRS})
 endif()
-
+endif()
 ############# find dependent libraries end ############
 
 if(CMAKE_SIZEOF_VOID_P STREQUAL 4)
