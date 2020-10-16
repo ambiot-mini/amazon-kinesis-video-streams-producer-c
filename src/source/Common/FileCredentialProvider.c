@@ -134,8 +134,11 @@ STATUS readFileCredentials(PFileCredentialProvider pFileCredentialProvider)
         currentTime + CREDENTIAL_FILE_READ_GRACE_PERIOD > pFileCredentialProvider->pAwsCredentials->expiration,
         retStatus);
 
-
+    #ifdef KVS_PLAT_ESP_FREERTOS
+    fp = fopen((PCHAR) pFileCredentialProvider->credentialsFilepath, "r");
+    #else
     fp = FOPEN((PCHAR) pFileCredentialProvider->credentialsFilepath, "r");
+    #endif
 
     CHK(fp != NULL, STATUS_FILE_CREDENTIAL_PROVIDER_OPEN_FILE_FAILED);
 
