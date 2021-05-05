@@ -6,10 +6,10 @@ project(KinesisVideoProducerC LANGUAGES C)
 # User Flags
 option(ADD_MUCLIBC "Add -muclibc c flag" OFF)
 option(BUILD_DEPENDENCIES "Whether or not to build depending libraries from source" ON)
-option(USE_OPENSSL "Use openssl as crypto library" ON)
-option(USE_MBEDTLS "Use openssl as crypto library" OFF)
-option(BUILD_COMMON_LWS "Whether or not to build ProducerC libwebsockets common library" OFF)
-option(BUILD_COMMON_CURL "Whether or not to build ProducerC curl common library" ON)
+option(USE_OPENSSL "Use openssl as crypto library" OFF)
+option(USE_MBEDTLS "Use openssl as crypto library" ON)
+option(BUILD_COMMON_LWS "Whether or not to build ProducerC libwebsockets common library" ON)
+option(BUILD_COMMON_CURL "Whether or not to build ProducerC curl common library" OFF)
 option(BUILD_OPENSSL_PLATFORM "If buildng OpenSSL what is the target platform" OFF)
 
 # Developer Flags
@@ -21,8 +21,8 @@ option(MEMORY_SANITIZER "Build with MemorySanitizer." OFF)
 option(THREAD_SANITIZER "Build with ThreadSanitizer." OFF)
 option(UNDEFINED_BEHAVIOR_SANITIZER "Build with UndefinedBehaviorSanitizer." OFF)
 option(ALIGNED_MEMORY_MODEL "Aligned memory model ONLY." OFF)
-option(BUILD_KVSPIC "Whether or not to build the part of kvs pic" OFF)
-option(KVS_PLAT_ESP_FREERTOS "Build for ESP FreeRTOS" ON)
+option(BUILD_KVSPIC "Whether or not to build the part of kvs pic" ON)
+option(KVS_PLAT_ESP_FREERTOS "Build for ESP FreeRTOS" OFF)
 
 
 if(KVS_PLAT_ESP_FREERTOS)
