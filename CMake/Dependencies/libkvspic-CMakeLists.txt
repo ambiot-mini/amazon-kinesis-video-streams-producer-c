@@ -6,8 +6,8 @@ include(ExternalProject)
 
 # clone repo only
 ExternalProject_Add(libkvspic-download
-	GIT_REPOSITORY    https://github.com/awslabs/amazon-kinesis-video-streams-pic.git
-    	GIT_TAG           1988f99fe77a3b37e9ed33643c20190a5c2e1689
+	GIT_REPOSITORY    https://github.com/iotlabtpe/amazon-kinesis-video-streams-pic.git
+		GIT_TAG           8d6605be3dcc49fda6b8fd55296b6d8271fbbabd
     	SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/kvspic-src"
 	BINARY_DIR        "${CMAKE_CURRENT_BINARY_DIR}/kvspic-build"
 	CMAKE_ARGS
