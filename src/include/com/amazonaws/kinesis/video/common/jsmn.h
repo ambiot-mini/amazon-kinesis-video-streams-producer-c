@@ -26,6 +26,9 @@
 
 #include <stddef.h>
 
+/* Include the parent links so we can more easily traverse the JSON structure. */
+#define JSMN_PARENT_LINKS
+
 #ifdef __cplusplus
 extern "C" {
 #endif
