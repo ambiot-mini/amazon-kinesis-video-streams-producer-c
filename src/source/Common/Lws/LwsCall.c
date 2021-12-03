@@ -9,15 +9,16 @@ STATUS blockingLwsCall(PRequestInfo pRequestInfo, PCallInfo pCallInfo)
     ENTERS();
     STATUS retStatus = STATUS_SUCCESS;
     PCHAR pHostStart, pHostEnd;
-    CHAR path[MAX_URI_CHAR_LEN + 1];
+    PCHAR pPath = NULL;
     struct lws_context* lwsContext = NULL;
     struct lws_context_creation_info creationInfo;
     struct lws_client_connect_info connectInfo;
-    struct lws *clientLws = NULL;
+    struct lws* clientLws = NULL;
     volatile INT32 retVal = 0;
     struct lws_protocols lwsProtocols[2];
 
     CHK(pRequestInfo != NULL && pCallInfo != NULL, STATUS_NULL_ARG);
+    CHK(NULL != (pPath = (PCHAR) MEMCALLOC(MAX_URI_CHAR_LEN + 1, SIZEOF(CHAR))), STATUS_NOT_ENOUGH_MEMORY);
 
     // Prepare the signaling channel protocols array
     MEMSET(lwsProtocols, 0x00, SIZEOF(lwsProtocols));
@@ -50,14 +51,14 @@ STATUS blockingLwsCall(PRequestInfo pRequestInfo, PCallInfo pCallInfo)
     CHK_STATUS(getRequestHost(pRequestInfo->url, &pHostStart, &pHostEnd));
 
     // Store the path
-    STRNCPY(path, pHostEnd, MAX_URI_CHAR_LEN);
-    path[MAX_URI_CHAR_LEN] = '\0';
+    STRNCPY(pPath, pHostEnd, MAX_URI_CHAR_LEN);
+    pPath[MAX_URI_CHAR_LEN] = '\0';
 
     // NULL terminate the host
     *pHostEnd = '\0';
 
     connectInfo.address = pHostStart;
-    connectInfo.path = path;
+    connectInfo.path = pPath;
     connectInfo.host = connectInfo.address;
     connectInfo.method = HTTP_REQUEST_VERB_GET_STRING;
     connectInfo.protocol = lwsProtocols[0].name;
@@ -83,20 +84,19 @@ CleanUp:
         // Destroy the context
         lws_context_destroy(lwsContext);
     }
-
+    SAFE_MEMFREE(pPath);
     LEAVES();
     return retStatus;
 }
 
-INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
-        PVOID user, PVOID pDataIn, size_t dataSize)
+INT32 lwsIotCallbackRoutine(struct lws* wsi, enum lws_callback_reasons reason, PVOID user, PVOID pDataIn, size_t dataSize)
 {
     UNUSED_PARAM(user);
     STATUS retStatus = STATUS_SUCCESS;
     PVOID customData;
     INT32 status, size, retValue = 0;
     PCHAR pCurPtr, pBuffer;
-    CHAR buffer[IOT_LWS_SEND_BUFFER_SIZE];
+    PCHAR pLwsSendBuffer = NULL;
     PBYTE pEndPtr;
     PBYTE* ppStartPtr;
     PCallInfo pCallInfo;
@@ -111,12 +111,14 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
 
     // Early return
     CHK(pCallInfo != NULL, retStatus);
-    lws_set_log_level(LLL_NOTICE | LLL_INFO | LLL_WARN | LLL_ERR, NULL);
+    CHK(NULL != (pLwsSendBuffer = (PCHAR) MEMCALLOC(IOT_LWS_SEND_BUFFER_SIZE, SIZEOF(CHAR))), STATUS_NOT_ENOUGH_MEMORY);
+
+    lws_set_log_level(LLL_WARN | LLL_ERR, NULL);
 
     pRequestInfo = pCallInfo->pRequestInfo;
-    pBuffer = buffer + LWS_PRE;
+    pBuffer = pLwsSendBuffer + LWS_PRE;
 
-    DLOGV("HTTPS callback with reason %d", reason);
+    DLOGD("HTTPS callback with reason %d", reason);
 
     switch (reason) {
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
@@ -141,10 +143,7 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
             pCallInfo->callResult = getServiceCallResultFromHttpStatus((UINT32) status);
 
             // Store the Request ID header
-            if ((size = lws_hdr_custom_copy(wsi,
-                                            pBuffer,
-                                            SIZEOF(buffer),
-                                            KVS_REQUEST_ID_HEADER_NAME ":",
+            if ((size = lws_hdr_custom_copy(wsi, pBuffer, MAX_URI_CHAR_LEN, KVS_REQUEST_ID_HEADER_NAME ":",
                                             SIZEOF(KVS_REQUEST_ID_HEADER_NAME) * SIZEOF(CHAR))) > 0) {
                 pBuffer[size] = '\0';
                 DLOGI("Request ID: %s", pBuffer);
@@ -157,8 +156,7 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
             lwsl_hexdump_debug(pDataIn, dataSize);
 
             if (dataSize != 0) {
-                CHK(NULL != (pCallInfo->responseData = (PCHAR) MEMALLOC(dataSize)),
-                    STATUS_NOT_ENOUGH_MEMORY);
+                CHK(NULL != (pCallInfo->responseData = (PCHAR) MEMALLOC(dataSize)), STATUS_NOT_ENOUGH_MEMORY);
                 MEMCPY(pCallInfo->responseData, pDataIn, dataSize);
                 pCallInfo->responseDataLen = (UINT32) dataSize;
             }
@@ -167,7 +165,7 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
 
         case LWS_CALLBACK_RECEIVE_CLIENT_HTTP:
             DLOGD("Received client http");
-            size = SIZEOF(buffer);
+            size = MAX_URI_CHAR_LEN;
             if (lws_http_client_read(wsi, &pBuffer, &size) < 0) {
                 retValue = -1;
             }
@@ -205,12 +203,8 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
 
                 DLOGV("Appending header - %s %s", pRequestHeader->pName, pRequestHeader->pValue);
 
-                status = lws_add_http_header_by_name(wsi,
-                                                     (PBYTE) pRequestHeader->pName,
-                                                     (PBYTE) pRequestHeader->pValue,
-                                                     pRequestHeader->valueLen,
-                                                     ppStartPtr,
-                                                     pEndPtr);
+                status = lws_add_http_header_by_name(wsi, (PBYTE) pRequestHeader->pName, (PBYTE) pRequestHeader->pValue, pRequestHeader->valueLen,
+                                                     ppStartPtr, pEndPtr);
                 if (status != 0) {
                     retValue = 1;
                     CHK(FALSE, retStatus);
@@ -236,8 +230,7 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
             size = lws_write(wsi, (PBYTE) pBuffer, (SIZE_T) pRequestInfo->bodySize, LWS_WRITE_TEXT);
 
             if (size != pRequestInfo->bodySize) {
-                DLOGW("Failed to write out the body of POST request entirely. Expected to write %d, wrote %d",
-                      pRequestInfo->bodySize, size);
+                DLOGW("Failed to write out the body of POST request entirely. Expected to write %d, wrote %d", pRequestInfo->bodySize, size);
                 if (size > 0) {
                     // Schedule again
                     lws_client_http_body_pending(wsi, 1);
@@ -257,6 +250,7 @@ INT32 lwsIotCallbackRoutine(struct lws *wsi, enum lws_callback_reasons reason,
     }
 
 CleanUp:
+    SAFE_MEMFREE(pLwsSendBuffer);
 
     if (STATUS_FAILED(retStatus)) {
         if (pRequestInfo != NULL) {
